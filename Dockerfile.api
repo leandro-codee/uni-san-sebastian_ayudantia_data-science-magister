@@ -1,0 +1,41 @@
+# Dockerfile.api - API Flask con modelo de ML
+FROM python:3.11-slim
+
+# Variables de entorno
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear directorio de trabajo
+WORKDIR /app
+
+# Copiar requirements primero (para aprovechar cache de Docker)
+COPY requirements.txt .
+
+# Instalar dependencias Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código de la aplicación
+COPY . .
+
+# Crear directorio para datos
+RUN mkdir -p /app/data
+
+# Exponer puerto
+EXPOSE 4000
+
+# Variables de entorno por defecto
+ENV FLASK_APP=app.py \
+    FLASK_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=4000
+
+# Comando por defecto
+CMD ["python", "app.py"]

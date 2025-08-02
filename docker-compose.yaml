@@ -1,0 +1,153 @@
+# Red interna para que los servicios se comuniquen
+networks:
+  datascience-net:
+    driver: bridge
+
+# Volúmenes persistentes para datos
+volumes:
+  postgres_data:
+  qdrant_data:
+  n8n_data:
+
+services:
+  # Base de datos PostgreSQL
+  postgres:
+    image: postgres:15
+    container_name: datascience-postgres
+    environment:
+      POSTGRES_DB: datascience
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_db:/docker-entrypoint-initdb.d
+    networks:
+      - datascience-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Base de datos vectorial Qdrant
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    container_name: datascience-qdrant
+    ports:
+      - "6333:6333"  # HTTP API
+      - "6334:6334"  # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - datascience-net
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__SERVICE__GRPC_PORT: 6334
+
+  # Automatización de workflows n8n
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: datascience-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      N8N_BASIC_AUTH_ACTIVE: true
+      N8N_BASIC_AUTH_USER: admin
+      N8N_BASIC_AUTH_PASSWORD: n8npassword123
+      N8N_SECURE_COOKIE: false
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: postgres
+      DB_POSTGRESDB_PASSWORD: postgres
+      N8N_ENCRYPTION_KEY: mysecretencryptionkey123
+      WEBHOOK_URL: http://localhost:5678/
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - datascience-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Jupyter Lab para análisis interactivo
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile.jupyter
+    container_name: datascience-jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/home/jovyan/work/notebooks
+      - ./data:/home/jovyan/work/data
+      - ./scripts:/home/jovyan/work/scripts
+    networks:
+      - datascience-net
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+      JUPYTER_TOKEN: "datascience123"
+      CHOWN_HOME: "yes"
+      CHOWN_HOME_OPTS: "-R"
+      # Variables para conectar a los otros servicios
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: datascience
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+    user: "1000:1000"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - qdrant
+
+  # Contenedor Python para desarrollo de APIs
+  python-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: datascience-api
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./api:/app
+      - ./data:/app/data
+    networks:
+      - datascience-net
+    environment:
+      FLASK_ENV: development
+      FLASK_DEBUG: 1
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: datascience
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      QDRANT_URL: http://qdrant:6333
+      PORT: 4000
+    depends_on:
+      - postgres
+      - qdrant
+    restart: unless-stopped
+    command: python app.py
+
+  # Adminer para gestión visual de PostgreSQL (alternativa a DBeaver)
+  adminer:
+    image: adminer:4.8.1
+    container_name: datascience-adminer
+    ports:
+      - "8081:8080"
+    networks:
+      - datascience-net
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres

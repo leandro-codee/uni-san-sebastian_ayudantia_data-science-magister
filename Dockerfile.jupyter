@@ -1,0 +1,75 @@
+# Dockerfile.jupyter - Jupyter Lab con librerías de Data Science
+FROM jupyter/scipy-notebook:latest
+
+# Cambiar a usuario root para instalar dependencias del sistema
+USER root
+
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    curl \
+    wget \
+    git \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# Volver al usuario de Jupyter
+USER $NB_UID
+
+# Instalar librerías Python específicas para Data Science
+RUN pip install --no-cache-dir \
+    # Machine Learning
+    scikit-learn==1.3.2 \
+    tensorflow==2.15.0 \
+    torch==2.1.0 \
+    transformers==4.35.0 \
+    # APIs y Web
+    fastapi==0.104.1 \
+    flask==3.0.0 \
+    uvicorn==0.24.0 \
+    streamlit==1.28.1 \
+    # Data Processing
+    pandas==2.1.4 \
+    numpy==1.25.2 \
+    polars==0.19.14 \
+    # Visualización
+    matplotlib==3.8.2 \
+    seaborn==0.13.0 \
+    plotly==5.17.0 \
+    altair==5.2.0 \
+    bokeh==3.3.2 \
+    # Bases de datos
+    psycopg2-binary==2.9.9 \
+    sqlalchemy==2.0.23 \
+    qdrant-client==1.7.0 \
+    # Utilities
+    requests==2.31.0 \
+    beautifulsoup4==4.12.2 \
+    lxml==4.9.3 \
+    # Jupyter Extensions
+    jupyter-dash==0.4.2 \
+    ipywidgets==8.1.1 \
+    jupyterlab-git==0.44.0 \
+    # Geospatial (para el proyecto de pathfinding)
+    osmnx==1.7.1 \
+    geopandas==0.14.1 \
+    folium==0.15.0 \
+    # Otros
+    python-dotenv==1.0.0 \
+    tqdm==4.66.1
+
+# Crear directorios de trabajo
+RUN mkdir -p /home/jovyan/work/notebooks \
+    && mkdir -p /home/jovyan/work/data \
+    && mkdir -p /home/jovyan/work/scripts
+
+# Copiar notebooks de ejemplo (si existen)
+COPY --chown=${NB_UID}:${NB_GID} notebooks/ /home/jovyan/work/notebooks/
+
+# Configurar directorio de trabajo
+WORKDIR /home/jovyan/work
+
+# Exponer puerto de Jupyter
+EXPOSE 8888
+
+# El comando por defecto ya está definido en la imagen base
