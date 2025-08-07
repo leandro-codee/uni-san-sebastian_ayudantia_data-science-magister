@@ -2,7 +2,7 @@
 -- Script de inicialización para PostgreSQL
 
 -- Crear base de datos para n8n (si no existe)
-CREATE DATABASE IF NOT EXISTS n8n;
+CREATE DATABASE n8n;
 
 -- Usar la base de datos principal
 \c datascience;
